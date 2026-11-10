@@ -136,6 +136,14 @@ select.inp{padding:4px 6px}
   .side{border-right:0;overflow:visible;padding-bottom:12px}
   .stage iframe{min-height:720px}
 }
+
+.fav{display:flex;align-items:center;gap:12px}
+.fav-big{width:44px;height:44px;flex:none;padding:6px;background:var(--field);border:1px solid var(--line);border-radius:6px;object-fit:contain}
+.fav-col{display:grid;gap:4px;min-width:0;flex:1}
+.tabmock{display:flex;align-items:center;gap:7px;min-width:0;background:var(--field);border:1px solid var(--line);border-radius:8px 8px 0 0;padding:5px 10px}
+.tabmock img{width:16px;height:16px;flex:none;object-fit:contain}
+.tabmock span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.btns{display:flex;gap:6px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -234,7 +242,7 @@ function normalize(d){
 let S = normalize(loadLocal() || clone(DEFAULT));
 let sel = 0, pvMode = 'sign', pvWidth = 'pc';
 let lastSnap = JSON.stringify(S), past = [], future = [];
-const openSecs = new Set(['basic','signs','edit']);
+const openSecs = new Set(['basic','meta','signs','edit']);
 
 /* ───────── 기록 / 브라우저 저장 ───────── */
 function loadLocal(){ try { const v = localStorage.getItem(STORE) || localStorage.getItem('dz-editor-v1'); return v ? JSON.parse(v) : null; } catch { return null; } }
@@ -256,7 +264,36 @@ function syncUndo(){ $('#bUndo').disabled = !past.length && JSON.stringify(S) ==
 
 /* ───────── 출력 ───────── */
 const dataJson = d => JSON.stringify(d).replace(/</g, '\\u003c');
-const build = d => TEMPLATE.replace('__DZ_DATA__', () => dataJson(d));
+/* ───────── 탭 제목 · 파비콘 ───────── */
+const attr = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const svgUri = svg => 'data:image/svg+xml,' + encodeURIComponent(svg);
+/* 테마별 대표 표지판 (혼잡 주의 삼각 표지 기반, 테마 색으로) */
+const favTri = (R, Y, K, rim = '#fff') => `<polygon points="32,4 61,57 3,57" fill="${rim}" stroke="${rim}" stroke-width="4" stroke-linejoin="round"/><polygon points="32,8 57,54 7,54" fill="${R}" stroke="${R}" stroke-width="3" stroke-linejoin="round"/><polygon points="32,20 48,49 16,49" fill="${Y}" stroke="${Y}" stroke-width="2" stroke-linejoin="round"/><rect x="30" y="27" width="4" height="12" rx="2" fill="${K}"/><circle cx="32" cy="44" r="2.5" fill="${K}"/>`;
+const favBadge = (bg, inner) => `<rect width="64" height="64" rx="12" fill="${bg}"/><g transform="translate(6.4 7) scale(.8)">${inner}</g>`;
+const FAV = {
+  day:    () => favTri('#D22A2A', '#F4B400', '#1A1A1A'),
+  night:  () => favBadge('#273042', favTri('#E0302A', '#FFC21A', '#101010')),
+  sodium: () => favBadge('#3B322A', favTri('#C2532B', '#FFB347', '#2A1E12')),
+  mint:   () => favTri('#E28E8B', '#F3E3A0', '#23443A'),
+  mono:   () => favTri('#3A3A3A', '#E6E6E2', '#111111'),
+  angel:  () => favTri('#8DB0DB', '#EAF3FC', '#5B6B85'),
+  y2k:    () => `<clipPath id="c"><rect x="2" y="2" width="60" height="60" rx="9"/></clipPath><g clip-path="url(#c)"><rect width="64" height="64" fill="#FFF100"/><rect width="64" height="17" fill="#E4E5E9"/><rect y="17" width="64" height="1.5" fill="#1C1C1E" opacity=".25"/></g><rect x="2" y="2" width="60" height="60" rx="9" fill="none" stroke="#1C1C1E" stroke-width="3"/><circle cx="12" cy="9.5" r="2.7" fill="#FF5F57"/><circle cx="20" cy="9.5" r="2.7" fill="#FEBC2E"/><circle cx="28" cy="9.5" r="2.7" fill="#28C840"/><polygon points="32,22 49,54 15,54" fill="#1C1C1E" stroke="#1C1C1E" stroke-width="3" stroke-linejoin="round"/><rect x="30" y="31" width="4" height="12" rx="2" fill="#FFF100"/><circle cx="32" cy="48" r="2.4" fill="#FFF100"/>`,
+  stamp:  () => `<rect x="3" y="3" width="58" height="58" fill="#FBF8F0" stroke="#2F4A9A" stroke-width="3" stroke-dasharray="4 3"/><rect x="10" y="10" width="44" height="44" fill="#2F4A9A"/><polygon points="32,15 48,47 16,47" fill="#F5F0E4" stroke="#F5F0E4" stroke-width="3" stroke-linejoin="round"/><rect x="30" y="24" width="4" height="12" rx="2" fill="#2F4A9A"/><circle cx="32" cy="41" r="2.5" fill="#2F4A9A"/>`,
+};
+const themeFavicon = t => svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${(FAV[t] || FAV.day)()}</svg>`);
+function faviconHref(d){
+  const v = String(d.favicon || '').trim();
+  if (!v) return themeFavicon(d.theme);
+  if (/^(data:|https?:|\/|\.{1,2}\/)/i.test(v) || /\.(png|svg|ico|jpe?g|gif|webp)(\?.*)?$/i.test(v)) return v;
+  if ([...v].length <= 8) return svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="54" font-size="84" text-anchor="middle" dominant-baseline="central">${attr(v)}</text></svg>`);
+  return v;
+}
+const tabTitle = d => String(d.pageTitle || '').replace(/\s+/g, ' ').trim() || String(d.title || '').replace(/\s+/g, ' ').trim() || '드림 혼잡구역';
+function headTags(d){
+  const href = faviconHref(d), mime = (href.match(/^data:([^;,]+)/) || [])[1];
+  return `<title>${attr(tabTitle(d))}</title>\n<link rel="icon"${mime ? ` type="${mime}"` : ''} href="${attr(href)}">` + (mime === 'image/png' ? `\n<link rel="apple-touch-icon" href="${attr(href)}">` : '');
+}
+const build = d => TEMPLATE.replace('<title>드림 혼잡구역</title>', () => headTags(d)).replace('__DZ_DATA__', () => dataJson(d));
 function buildPreview(){
   const pv = { open: pvMode !== 'closed', sign: pvMode === 'sign' ? sel : null, radio: openSecs.has('bgm') };
   return build(S).replace('<body>', () => `<body><script>window.DZ_PREVIEW=${JSON.stringify(pv)}<\/script>`);
@@ -496,6 +533,58 @@ function blockBody(b, si, bi){
   return [];
 }
 
+/* ───────── 탭 제목 · 파비콘 입력 ───────── */
+async function fileToFavicon(file){
+  const raw = () => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+  if (file.type === 'image/svg+xml' || /\.(svg|ico)$/i.test(file.name)){ if (file.size > 150000) throw new Error('big'); return raw(); }
+  const bmp = await createImageBitmap(file), n = 128, k = Math.min(n / bmp.width, n / bmp.height);
+  const c = document.createElement('canvas'); c.width = c.height = n;
+  const w = bmp.width * k, hh = bmp.height * k;
+  c.getContext('2d').drawImage(bmp, (n - w) / 2, (n - hh) / 2, w, hh);
+  bmp.close?.();
+  return c.toDataURL('image/png');
+}
+let paintMeta = () => {};
+function metaSection(){
+  const themeName = Object.fromEntries(THEMES)[S.theme || 'day'];
+  const big = h('img', { class:'fav-big', alt:'파비콘 미리보기' });
+  const small = h('img', { alt:'' });
+  const tabT = h('span', {});
+  const stat = h('p', { class:'tip' });
+  const urlIn = h('input', { class:'inp' });
+  const fileIn = h('input', { type:'file', accept:'image/*,.ico', hidden:true });
+  const rst = h('button', { class:'btn sm ghost', type:'button', onclick: () => mutate(() => S.favicon = '') }, '테마 기본으로');
+  const up = h('button', { class:'btn sm', type:'button', onclick: () => fileIn.click() }, '이미지 올리기');
+
+  const paint = () => {
+    const v = String(S.favicon || '').trim(), href = faviconHref(S);
+    big.src = href; small.src = href; tabT.textContent = tabTitle(S);
+    stat.textContent = !v ? `따로 고르지 않아서 ${themeName} 테마의 대표 표지판이 들어가요`
+      : v.startsWith('data:') ? '올린 이미지를 쓰고 있어요' : '입력한 아이콘을 쓰고 있어요';
+    rst.disabled = !v;
+    urlIn.placeholder = v.startsWith('data:') ? '올린 이미지 사용 중 (새 주소나 이모지를 쓰면 바뀌어요)' : '이미지 주소 또는 이모지 (예: 🚧)';
+  };
+  paintMeta = paint;
+
+  const v0 = String(S.favicon || '');
+  urlIn.value = v0.startsWith('data:') ? '' : v0;
+  urlIn.addEventListener('input', () => { S.favicon = urlIn.value; typed(); });
+  fileIn.addEventListener('change', async () => {
+    const f = fileIn.files[0]; fileIn.value = ''; if (!f) return;
+    try { const url = await fileToFavicon(f); mutate(() => S.favicon = url); toast('파비콘을 바꿨어요'); }
+    catch { toast('이 이미지는 파비콘으로 못 읽었어요 (SVG·ICO는 150KB까지)'); }
+  });
+
+  const d = section('meta', '탭 제목 · 파비콘', null,
+    text('탭 제목 (브라우저 탭에 보이는 이름)', S, 'pageTitle', { line:true, ph: tabTitle({ title:S.title }) }),
+    h('p', { class:'tip' }, '비워 두면 큰 제목을 그대로 써요.'),
+    h('div', { class:'fav' }, big, h('div', { class:'fav-col' }, h('div', { class:'tabmock' }, small, tabT), stat)),
+    h('label', { class:'f' }, h('span', {}, '파비콘 (이미지 주소 / 이모지)'), urlIn),
+    h('div', { class:'btns' }, up, rst, fileIn));
+  paint();
+  return d;
+}
+
 /* ───────── 화면 그리기 ───────── */
 function render(){
   const side = $('#side'), keep = side.scrollTop;
@@ -508,6 +597,7 @@ function render(){
     h('div', { class:'row2' }, number('혼잡도 막대 (0~5)', S, 'congestion', 0, 5), text('혼잡도 문구', S, 'meter', { line:true })),
     text('접힌 상태 안내 문구', S, 'hint', { line:true }),
     h('div', { class:'row2' }, toggle('효과음 켜기', S, 'sound'), toggle('이미지 스크린 효과', S, 'screenFx'))));
+  side.append(metaSection());
 
   side.append(section('look', '색상 테마 · 배치', null,
     h('div', { class:'f' }, h('span', {}, '색상 테마'), seg(THEMES, S.theme || 'day', v => mutate(() => S.theme = v))),
@@ -665,6 +755,7 @@ $('#fImport').addEventListener('change', async e => {
 document.querySelectorAll('#pvMode button').forEach(b => b.onclick = () => { pvMode = b.dataset.v; render(); refresh(); });
 document.querySelectorAll('#pvWidth button').forEach(b => b.onclick = () => { pvWidth = b.dataset.v; $('#stage').classList.toggle('mobile', pvWidth === 'mobile'); render(); });
 addEventListener('resize', () => document.querySelectorAll('textarea.inp').forEach(grow));
+$('#side').addEventListener('input', () => paintMeta());
 
 render(); refresh(); SRV.init();
 })();
